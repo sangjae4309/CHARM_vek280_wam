@@ -1,28 +1,29 @@
 #include <adf.h>
 #include <stdio.h>
 #include "para_L{{layer}}.h"
-    
+{% include "kernel5_mac_pair.inc" %}
+
 void mm5_kernel2_L{{layer}}(input_window_int16* __restrict matA,
         input_window_int16* __restrict matB,
-        input_stream_acc48* __restrict acc_in,
+        input_cascade<acc64>* __restrict acc_in,
         output_window_int16* __restrict matC){
 
-    
-    v32int16 chess_storage(xa) buf_matA0 = undef_v32int16();
-    v32int16 chess_storage(xb) buf_matA1 = undef_v32int16();
-    v16int16 chess_storage(wc0) buf_matB0=undef_v16int16();
-    v16int16 chess_storage(wc1) buf_matB1=undef_v16int16();
 
-    buf_matA0=upd_w(buf_matA0,0,window_read_v16(matA));  
-    window_incr(matA,L{{layer}}_h1);                                
-    buf_matA0=upd_w(buf_matA0,1,window_read_v16(matA));  
+    aie::vector<int16, 32> buf_matA0;
+    aie::vector<int16, 32> buf_matA1;
+    aie::vector<int16, 16> buf_matB0;
+    aie::vector<int16, 16> buf_matB1;
+
+    buf_matA0.insert(0, window_read_v<16>(matA));
+    window_incr(matA,L{{layer}}_h1);
+    buf_matA0.insert(1, window_read_v<16>(matA));
     window_incr(matA,L{{layer}}_h1);
 
-    buf_matB0 = upd_v(buf_matB0,0,window_read_v8(matB));  
+    buf_matB0.insert(0, window_read_v<8>(matB));
     window_incr(matB,L{{layer}}_w1);
-    buf_matB0 = upd_v(buf_matB0,1,window_read_v8(matB));  
+    buf_matB0.insert(1, window_read_v<8>(matB));
     window_decr(matB,L{{layer}}_jump_B0);
-    
+
     for (unsigned int i=0;i<L{{layer}}_boundary_i;i++)  //i/16
     chess_prepare_for_pipelining
     chess_loop_range(L{{layer}}_boundary_i,)
@@ -31,8 +32,12 @@ void mm5_kernel2_L{{layer}}(input_window_int16* __restrict matA,
         chess_prepare_for_pipelining
         chess_loop_range(L{{layer}}_boundary_j,)
         {
-            v16acc48 acc0=concat(readincr_v8(acc_in),readincr_v8(acc_in));
-            v16acc48 acc1=concat(readincr_v8(acc_in),readincr_v8(acc_in));
+            aie::accum<acc64, 16> acc0;
+                acc0.insert(0, readincr_v<8>(acc_in));
+                acc0.insert(1, readincr_v<8>(acc_in));
+            aie::accum<acc64, 16> acc1;
+                acc1.insert(0, readincr_v<8>(acc_in));
+                acc1.insert(1, readincr_v<8>(acc_in));
             int jump=L{{layer}}_h1;
             if (j==L{{layer}}_judge_j){
                 jump=L{{layer}}_jump_A0;
@@ -40,148 +45,148 @@ void mm5_kernel2_L{{layer}}(input_window_int16* __restrict matA,
             else{
                 jump=L{{layer}}_h1;
             }
-            
-            acc0 = mac16(acc0,buf_matA0,0,0x73727170,0x77767574,0x3120,buf_matB0,0,0x0,0x0,1);
-            buf_matA1=upd_w(buf_matA1,0,window_read_v16(matA));    
+
+            acc0 = mm5_mac_pair<0>(acc0, buf_matA0, buf_matB0);
+            buf_matA1.insert(0, window_read_v<16>(matA));
             window_incr(matA,L{{layer}}_h1);
-            buf_matB1 = upd_v(buf_matB1,0,window_read_v8(matB));   	
-            window_incr(matB,L{{layer}}_w1); 
-            acc1 = mac16(acc1,buf_matA0,0,0x73727170,0x77767574,0x3120,buf_matB0,8,0x0,0x0,1);
-            buf_matA1=upd_w(buf_matA1,1,window_read_v16(matA));    
+            buf_matB1.insert(0, window_read_v<8>(matB));
+            window_incr(matB,L{{layer}}_w1);
+            acc1 = mm5_mac_pair<8>(acc1, buf_matA0, buf_matB0);
+            buf_matA1.insert(1, window_read_v<16>(matA));
             window_incr(matA,L{{layer}}_h1);
-            buf_matB1 = upd_v(buf_matB1,1,window_read_v8(matB));   
-            window_decr(matB,L{{layer}}_jump_B0); 
-        
-            acc0 = mac16(acc0,buf_matA1,0,0x73727170,0x77767574,0x3120,buf_matB0,2,0x0,0x0,1); 
-            buf_matA0=upd_w(buf_matA0,0,window_read_v16(matA));    
+            buf_matB1.insert(1, window_read_v<8>(matB));
+            window_decr(matB,L{{layer}}_jump_B0);
+
+            acc0 = mm5_mac_pair<2>(acc0, buf_matA1, buf_matB0);
+            buf_matA0.insert(0, window_read_v<16>(matA));
             window_incr(matA,L{{layer}}_h1);
-            acc1 = mac16(acc1,buf_matA1,0,0x73727170,0x77767574,0x3120,buf_matB0,10,0x0,0x0,1);
-            buf_matA0=upd_w(buf_matA0,1,window_read_v16(matA));    
+            acc1 = mm5_mac_pair<10>(acc1, buf_matA1, buf_matB0);
+            buf_matA0.insert(1, window_read_v<16>(matA));
             window_incr(matA,L{{layer}}_h1);
-        
-            acc0 = mac16(acc0,buf_matA0,0,0x73727170,0x77767574,0x3120,buf_matB0,4,0x0,0x0,1);  
-            buf_matA1=upd_w(buf_matA1,0,window_read_v16(matA));    
+
+            acc0 = mm5_mac_pair<4>(acc0, buf_matA0, buf_matB0);
+            buf_matA1.insert(0, window_read_v<16>(matA));
             window_incr(matA,L{{layer}}_h1);
-            acc1 = mac16(acc1,buf_matA0,0,0x73727170,0x77767574,0x3120,buf_matB0,12,0x0,0x0,1); 
-            buf_matA1=upd_w(buf_matA1,1,window_read_v16(matA));    
+            acc1 = mm5_mac_pair<12>(acc1, buf_matA0, buf_matB0);
+            buf_matA1.insert(1, window_read_v<16>(matA));
             window_incr(matA,L{{layer}}_h1);
-        
-            acc0 = mac16(acc0,buf_matA1,0,0x73727170,0x77767574,0x3120,buf_matB0,6,0x0,0x0,1); 
-            buf_matA0=upd_w(buf_matA0,0,window_read_v16(matA));    
+
+            acc0 = mm5_mac_pair<6>(acc0, buf_matA1, buf_matB0);
+            buf_matA0.insert(0, window_read_v<16>(matA));
             window_incr(matA,L{{layer}}_h1);
-            acc1 = mac16(acc1,buf_matA1,0,0x73727170,0x77767574,0x3120,buf_matB0,14,0x0,0x0,1); 
-            buf_matA0=upd_w(buf_matA0,1,window_read_v16(matA));    
+            acc1 = mm5_mac_pair<14>(acc1, buf_matA1, buf_matB0);
+            buf_matA0.insert(1, window_read_v<16>(matA));
             window_incr(matA,L{{layer}}_h1);
-        
-        
-            acc0 = mac16(acc0,buf_matA0,0,0x73727170,0x77767574,0x3120,buf_matB1,0,0x0,0x0,1);  
-            buf_matA1=upd_w(buf_matA1,0,window_read_v16(matA));    
+
+
+            acc0 = mm5_mac_pair<0>(acc0, buf_matA0, buf_matB1);
+            buf_matA1.insert(0, window_read_v<16>(matA));
             window_incr(matA,L{{layer}}_h1);
-            acc1 = mac16(acc1,buf_matA0,0,0x73727170,0x77767574,0x3120,buf_matB1,8,0x0,0x0,1);  
-            buf_matA1=upd_w(buf_matA1,1,window_read_v16(matA));    
+            acc1 = mm5_mac_pair<8>(acc1, buf_matA0, buf_matB1);
+            buf_matA1.insert(1, window_read_v<16>(matA));
             window_incr(matA,L{{layer}}_h1);
-            
-        
-            acc0 = mac16(acc0,buf_matA1,0,0x73727170,0x77767574,0x3120,buf_matB1,2,0x0,0x0,1); 
-            buf_matA0=upd_w(buf_matA0,0,window_read_v16(matA));    
+
+
+            acc0 = mm5_mac_pair<2>(acc0, buf_matA1, buf_matB1);
+            buf_matA0.insert(0, window_read_v<16>(matA));
             window_incr(matA,L{{layer}}_h1);
-            acc1 = mac16(acc1,buf_matA1,0,0x73727170,0x77767574,0x3120,buf_matB1,10,0x0,0x0,1);
-            buf_matA0=upd_w(buf_matA0,1,window_read_v16(matA));    
+            acc1 = mm5_mac_pair<10>(acc1, buf_matA1, buf_matB1);
+            buf_matA0.insert(1, window_read_v<16>(matA));
             window_incr(matA,L{{layer}}_h1);
-        
-            acc0 = mac16(acc0,buf_matA0,0,0x73727170,0x77767574,0x3120,buf_matB1,4,0x0,0x0,1);  
-            buf_matA1=upd_w(buf_matA1,0,window_read_v16(matA));    
+
+            acc0 = mm5_mac_pair<4>(acc0, buf_matA0, buf_matB1);
+            buf_matA1.insert(0, window_read_v<16>(matA));
             window_incr(matA,L{{layer}}_h1);
-            acc1 = mac16(acc1,buf_matA0,0,0x73727170,0x77767574,0x3120,buf_matB1,12,0x0,0x0,1); 
-            buf_matA1=upd_w(buf_matA1,1,window_read_v16(matA));    
+            acc1 = mm5_mac_pair<12>(acc1, buf_matA0, buf_matB1);
+            buf_matA1.insert(1, window_read_v<16>(matA));
             window_incr(matA,L{{layer}}_h1);
-        
-            acc0 = mac16(acc0,buf_matA1,0,0x73727170,0x77767574,0x3120,buf_matB1,6,0x0,0x0,1); 
-            buf_matA0=upd_w(buf_matA0,0,window_read_v16(matA));    
-            buf_matB0=upd_v(buf_matB0,0,window_read_v8(matB));     
+
+            acc0 = mm5_mac_pair<6>(acc0, buf_matA1, buf_matB1);
+            buf_matA0.insert(0, window_read_v<16>(matA));
+            buf_matB0.insert(0, window_read_v<8>(matB));
             window_incr(matA,L{{layer}}_h1);
             window_incr(matB,L{{layer}}_w1);
-        
-            acc1 = mac16(acc1,buf_matA1,0,0x73727170,0x77767574,0x3120,buf_matB1,14,0x0,0x0,1); 
-            buf_matA0=upd_w(buf_matA0,1,window_read_v16(matA));    
-            buf_matB0=upd_v(buf_matB0,1,window_read_v8(matB));  
+
+            acc1 = mm5_mac_pair<14>(acc1, buf_matA1, buf_matB1);
+            buf_matA0.insert(1, window_read_v<16>(matA));
+            buf_matB0.insert(1, window_read_v<8>(matB));
             window_incr(matA,L{{layer}}_h1);
             window_decr(matB,L{{layer}}_jump_B0);
-            
-            acc0 = mac16(acc0,buf_matA0,0,0x73727170,0x77767574,0x3120,buf_matB0,0,0x0,0x0,1);  
-            buf_matA1=upd_w(buf_matA1,0,window_read_v16(matA));    
-            buf_matB1 = upd_v(buf_matB1,0,window_read_v8(matB));   
-            window_incr(matA,L{{layer}}_h1);
-            window_incr(matB,L{{layer}}_w1); 
-            acc1 = mac16(acc1,buf_matA0,0,0x73727170,0x77767574,0x3120,buf_matB0,8,0x0,0x0,1);  
-            buf_matB1 = upd_v(buf_matB1,1,window_read_v8(matB));   
-            buf_matA1=upd_w(buf_matA1,1,window_read_v16(matA));    
-            window_incr(matA,L{{layer}}_h1);
-            window_incr(matB,8);
-            acc0 = mac16(acc0,buf_matA1,0,0x73727170,0x77767574,0x3120,buf_matB0,2,0x0,0x0,1); 
-            buf_matA0=upd_w(buf_matA0,0,window_read_v16(matA));    
-            window_incr(matA,L{{layer}}_h1);
-            acc1 = mac16(acc1,buf_matA1,0,0x73727170,0x77767574,0x3120,buf_matB0,10,0x0,0x0,1);
-            buf_matA0=upd_w(buf_matA0,1,window_read_v16(matA));    
-            window_incr(matA,L{{layer}}_h1);
-    
-            acc0 = mac16(acc0,buf_matA0,0,0x73727170,0x77767574,0x3120,buf_matB0,4,0x0,0x0,1);  
-            buf_matA1=upd_w(buf_matA1,0,window_read_v16(matA));    
-            window_incr(matA,L{{layer}}_h1);
-            acc1 = mac16(acc1,buf_matA0,0,0x73727170,0x77767574,0x3120,buf_matB0,12,0x0,0x0,1); 
-            buf_matA1=upd_w(buf_matA1,1,window_read_v16(matA));    
-            window_incr(matA,L{{layer}}_h1);
-    
-            acc0 = mac16(acc0,buf_matA1,0,0x73727170,0x77767574,0x3120,buf_matB0,6,0x0,0x0,1); 
-            buf_matA0=upd_w(buf_matA0,0,window_read_v16(matA));    
-            window_incr(matA,L{{layer}}_h1);
-            acc1 = mac16(acc1,buf_matA1,0,0x73727170,0x77767574,0x3120,buf_matB0,14,0x0,0x0,1); 
-            buf_matA0=upd_w(buf_matA0,1,window_read_v16(matA));    
-            window_incr(matA,L{{layer}}_h1);
-    
-    
-            acc0 = mac16(acc0,buf_matA0,0,0x73727170,0x77767574,0x3120,buf_matB1,0,0x0,0x0,1);  
-            buf_matA1=upd_w(buf_matA1,0,window_read_v16(matA));    
-            window_incr(matA,L{{layer}}_h1);
-            acc1 = mac16(acc1,buf_matA0,0,0x73727170,0x77767574,0x3120,buf_matB1,8,0x0,0x0,1);  
-            buf_matA1=upd_w(buf_matA1,1,window_read_v16(matA));    
-            window_incr(matA,L{{layer}}_h1);
-            
-    
-            acc0 = mac16(acc0,buf_matA1,0,0x73727170,0x77767574,0x3120,buf_matB1,2,0x0,0x0,1); 
-            buf_matA0=upd_w(buf_matA0,0,window_read_v16(matA));    
-            window_incr(matA,L{{layer}}_h1);
-            acc1 = mac16(acc1,buf_matA1,0,0x73727170,0x77767574,0x3120,buf_matB1,10,0x0,0x0,1);
-            buf_matA0=upd_w(buf_matA0,1,window_read_v16(matA));    
-            window_incr(matA,L{{layer}}_h1);
-    
-            acc0 = mac16(acc0,buf_matA0,0,0x73727170,0x77767574,0x3120,buf_matB1,4,0x0,0x0,1);  
-            buf_matA1=upd_w(buf_matA1,0,window_read_v16(matA));    
-            window_incr(matA,L{{layer}}_h1);
-            acc1 = mac16(acc1,buf_matA0,0,0x73727170,0x77767574,0x3120,buf_matB1,12,0x0,0x0,1); 
-            buf_matA1=upd_w(buf_matA1,1,window_read_v16(matA));    
-            window_incr(matA,jump);
-    
-    
-            acc0 = mac16(acc0,buf_matA1,0,0x73727170,0x77767574,0x3120,buf_matB1,6,0x0,0x0,1); 
-            window_write(matC,srs(acc0,0));
-            window_incr(matC,L{{layer}}_h1);
-    
-            buf_matA0=upd_w(buf_matA0,0,window_read_v16(matA));    
-            buf_matB0=upd_v(buf_matB0,0,window_read_v8(matB));     
+
+            acc0 = mm5_mac_pair<0>(acc0, buf_matA0, buf_matB0);
+            buf_matA1.insert(0, window_read_v<16>(matA));
+            buf_matB1.insert(0, window_read_v<8>(matB));
             window_incr(matA,L{{layer}}_h1);
             window_incr(matB,L{{layer}}_w1);
-    
-    
-            acc1 = mac16(acc1,buf_matA1,0,0x73727170,0x77767574,0x3120,buf_matB1,14,0x0,0x0,1); 
-            window_write(matC,srs(acc1,0));
-            window_incr(matC,jump);
-    
-            
-            buf_matA0=upd_w(buf_matA0,1,window_read_v16(matA));    
-            buf_matB0=upd_v(buf_matB0,1,window_read_v8(matB));  
+            acc1 = mm5_mac_pair<8>(acc1, buf_matA0, buf_matB0);
+            buf_matB1.insert(1, window_read_v<8>(matB));
+            buf_matA1.insert(1, window_read_v<16>(matA));
             window_incr(matA,L{{layer}}_h1);
-            window_decr(matB,L{{layer}}_jump_B0); 
+            window_incr(matB,8);
+            acc0 = mm5_mac_pair<2>(acc0, buf_matA1, buf_matB0);
+            buf_matA0.insert(0, window_read_v<16>(matA));
+            window_incr(matA,L{{layer}}_h1);
+            acc1 = mm5_mac_pair<10>(acc1, buf_matA1, buf_matB0);
+            buf_matA0.insert(1, window_read_v<16>(matA));
+            window_incr(matA,L{{layer}}_h1);
+
+            acc0 = mm5_mac_pair<4>(acc0, buf_matA0, buf_matB0);
+            buf_matA1.insert(0, window_read_v<16>(matA));
+            window_incr(matA,L{{layer}}_h1);
+            acc1 = mm5_mac_pair<12>(acc1, buf_matA0, buf_matB0);
+            buf_matA1.insert(1, window_read_v<16>(matA));
+            window_incr(matA,L{{layer}}_h1);
+
+            acc0 = mm5_mac_pair<6>(acc0, buf_matA1, buf_matB0);
+            buf_matA0.insert(0, window_read_v<16>(matA));
+            window_incr(matA,L{{layer}}_h1);
+            acc1 = mm5_mac_pair<14>(acc1, buf_matA1, buf_matB0);
+            buf_matA0.insert(1, window_read_v<16>(matA));
+            window_incr(matA,L{{layer}}_h1);
+
+
+            acc0 = mm5_mac_pair<0>(acc0, buf_matA0, buf_matB1);
+            buf_matA1.insert(0, window_read_v<16>(matA));
+            window_incr(matA,L{{layer}}_h1);
+            acc1 = mm5_mac_pair<8>(acc1, buf_matA0, buf_matB1);
+            buf_matA1.insert(1, window_read_v<16>(matA));
+            window_incr(matA,L{{layer}}_h1);
+
+
+            acc0 = mm5_mac_pair<2>(acc0, buf_matA1, buf_matB1);
+            buf_matA0.insert(0, window_read_v<16>(matA));
+            window_incr(matA,L{{layer}}_h1);
+            acc1 = mm5_mac_pair<10>(acc1, buf_matA1, buf_matB1);
+            buf_matA0.insert(1, window_read_v<16>(matA));
+            window_incr(matA,L{{layer}}_h1);
+
+            acc0 = mm5_mac_pair<4>(acc0, buf_matA0, buf_matB1);
+            buf_matA1.insert(0, window_read_v<16>(matA));
+            window_incr(matA,L{{layer}}_h1);
+            acc1 = mm5_mac_pair<12>(acc1, buf_matA0, buf_matB1);
+            buf_matA1.insert(1, window_read_v<16>(matA));
+            window_incr(matA,jump);
+
+
+            acc0 = mm5_mac_pair<6>(acc0, buf_matA1, buf_matB1);
+            window_write(matC,acc0.to_vector<int16>(0));
+            window_incr(matC,L{{layer}}_h1);
+
+            buf_matA0.insert(0, window_read_v<16>(matA));
+            buf_matB0.insert(0, window_read_v<8>(matB));
+            window_incr(matA,L{{layer}}_h1);
+            window_incr(matB,L{{layer}}_w1);
+
+
+            acc1 = mm5_mac_pair<14>(acc1, buf_matA1, buf_matB1);
+            window_write(matC,acc1.to_vector<int16>(0));
+            window_incr(matC,jump);
+
+
+            buf_matA0.insert(1, window_read_v<16>(matA));
+            buf_matB0.insert(1, window_read_v<8>(matB));
+            window_incr(matA,L{{layer}}_h1);
+            window_decr(matB,L{{layer}}_jump_B0);
         }
-    }	
+    }
 }
