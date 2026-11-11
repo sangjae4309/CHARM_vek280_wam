@@ -8,35 +8,52 @@ from .gen_array import*
 from .gen_kernel import*
 from .gen_combine import*
 from .gen_plio_place import*
+from ..kernel_families import KERNEL_FAMILIES
 
-def gen_aie_top(prj_dir,template_dir,Model_MM,placement):
-    kernel_type_num=8
+def gen_aie_top(prj_dir,template_dir,Model_MM,placement,input_data_dir=None,
+                simulation_iterations=None, input_files=None, copy_input_data=True,
+                io_mode="plio", graph_names=None, verbose=True):
     num_layer=Model_MM.shape[0]
+    if io_mode not in ("plio", "ports"):
+        raise ValueError("io_mode must be plio or ports")
+    if graph_names is None:
+        graph_names = [f"array_{i}" for i in range(num_layer)]
+    if len(graph_names) != num_layer or len(set(graph_names)) != num_layer:
+        raise ValueError("graph_names must be unique, one per array")
+    if simulation_iterations is None:
+        simulation_iterations = [4] * num_layer
+    if len(simulation_iterations) != num_layer or any(int(n) != n or n <= 0 for n in simulation_iterations):
+        raise ValueError("simulation_iterations must contain one positive integer per layer")
+    if input_files is None:
+        input_files = [["data/input0.txt", "data/input1.txt"] for _ in range(num_layer)]
+    if len(input_files) != num_layer or any(len(paths) != 2 for paths in input_files):
+        raise ValueError("input_files must contain one lhs/rhs pair per layer")
     port_width=128
     freq=230
     L_list=list(range(0,num_layer,1))
-    HW_Conf=Model_MM[:,3:]
+    families = list(Model_MM[:,11])
+    for family, row in zip(families, Model_MM):
+        if family not in KERNEL_FAMILIES:
+            raise ValueError(f"Use a supported template family name, not a numeric ID: {family!r}")
+        if int(row[10]) != KERNEL_FAMILIES[family]['bytes']:
+            raise ValueError(f"Element width does not match {family}")
+    dimensions = np.asarray(Model_MM[:,:11], dtype=int)
+    HW_Conf=dimensions[:,3:]
 
     aie_dir= prj_dir + '/aie'
     subprocess.run(['mkdir','-p' ,f'{aie_dir}'])
 
     ### Copy Data 
-    data_dir = template_dir +"/data/kernel" + str(Model_MM[0][11]) ##### Fix Me For Multiple Kernels#####
+    # A case may supply fixtures matching its tile shape and transport.
+    data_dir = input_data_dir if input_data_dir is not None else os.path.join(template_dir, "data", families[0]) ##### Fix Me For Multiple Kernels#####
     copy_data = Path(data_dir)
-    subprocess.run(['cp', '-r', copy_data, f'{prj_dir + "/data"}'])
+    if copy_input_data:
+        subprocess.run(['cp', '-r', copy_data, f'{prj_dir + "/data"}'], check=True)
     
-    template_path=[None]*kernel_type_num
-    template_name=[None]*kernel_type_num
-    environment=[None]*kernel_type_num
-    ### Define template PATH
-    for i in range (kernel_type_num):
-        template_path[i] = template_dir+"kernel"+ str(i)
-        template_name[i] = template_path[i]  + "/aie"
-        environment[i] = Environment(loader=FileSystemLoader(template_name[i]))
-
-    environment_kernel=[None]*kernel_type_num
-    for i in range (kernel_type_num):
-        environment_kernel[i] = Environment(loader=FileSystemLoader(template_name[i]))
+    environment = {
+        family: Environment(loader=FileSystemLoader(os.path.join(template_dir, family, "aie")))
+        for family in set(families)
+    }
 
     environment_combine = Environment(loader=FileSystemLoader(template_dir))
 
@@ -61,29 +78,20 @@ def gen_aie_top(prj_dir,template_dir,Model_MM,placement):
     Port_Conf_Pre = np.zeros((HW_Conf.shape[0],3)).astype(int)
     Port_Conf_Pre[L_list,:]= Port_Conf_Temp
 
-    gen_combine(environment_combine,port_width,freq,L_list,HW_Conf,Port_Conf_All,Port_Conf_Pre,port_total,Path(aie_dir))
+    gen_combine(environment_combine,port_width,freq,L_list,HW_Conf,Port_Conf_All,Port_Conf_Pre,port_total,Path(aie_dir),simulation_iterations,input_files,io_mode,graph_names,verbose)
 
     Place_config=np.zeros((Port_Conf.shape[0],10)).astype(int)
     Place_config[:,0:7]=HW_Conf[:,0:7]
     Place_config[:,7:10]=placement[:,1:4]
-    json_object=plio_placement(Place_config)
-    with open(prj_dir+'/aie_top_all_aie_mapped.aiecst', "w") as outfile:
-        outfile.write(json_object)
+    if io_mode == "plio":
+        json_object=plio_placement(Place_config)
+        with open(prj_dir+'/aie_top_all_aie_mapped.aiecst', "w") as outfile:
+            outfile.write(json_object)
 
     for i in L_list:
         layer=i
-        h1 = Model_MM[layer][0]
-        w1 = Model_MM[layer][1]
-        w2 = Model_MM[layer][2]
-        A  = Model_MM[layer][3]
-        B  = Model_MM[layer][4]
-        C  = Model_MM[layer][5]
-        A_BRO = Model_MM[layer][6]
-        C_BRO = Model_MM[layer][7]
-        PACK_IN = Model_MM[layer][8]
-        PACK_OUT = Model_MM[layer][9]
-        data_type=Model_MM[layer][10]
-        kernel_type=Model_MM[layer][11]
+        h1,w1,w2,A,B,C,A_BRO,C_BRO,PACK_IN,PACK_OUT,data_type = dimensions[layer]
+        family = families[layer]
         file_dir=aie_dir + "/layer" + str(layer)
         layer_name=str(layer)
 
@@ -92,8 +100,8 @@ def gen_aie_top(prj_dir,template_dir,Model_MM,placement):
         height   = placement[i][3]
         subprocess.run(['mkdir','-p' ,file_dir])
         aie_folder = Path(file_dir)
-        gen_para(environment[kernel_type],h1,w1,w2,A,B,C,A_BRO,C_BRO,PACK_IN,data_type,layer_name,aie_folder)
-        gen_krnl(environment_kernel[kernel_type],w1,kernel_type,layer_name,aie_folder)
-        gen_grah(environment[kernel_type],B,layer_name,aie_folder)
-        gen_toph(environment[kernel_type],A,B,C,A_BRO,C_BRO,PACK_IN,PACK_OUT,pos_col,pos_row,height,layer_name,aie_folder)
+        gen_para(environment[family],h1,w1,w2,A,B,C,A_BRO,C_BRO,PACK_IN,data_type,layer_name,aie_folder,verbose)
+        gen_krnl(environment[family],w1,KERNEL_FAMILIES[family]['source_prefix'],layer_name,aie_folder,verbose)
+        gen_grah(environment[family],B,layer_name,aie_folder,verbose)
+        gen_toph(environment[family],A,B,C,A_BRO,C_BRO,PACK_IN,PACK_OUT,pos_col,pos_row,height,layer_name,aie_folder,verbose)
 

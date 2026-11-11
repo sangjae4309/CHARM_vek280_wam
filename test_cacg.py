@@ -10,119 +10,119 @@ model='MLP'
 acc='one_spe'
 DATA_TYPE=2
 
-# h1,   w1,   w2,   A,   B,   C,  A_BRO, C_BRO,  PACK_IN, PACK_OUT, X,   Y,   Z,  data_type  kernel_type
+# h1,   w1,   w2,   A,   B,   C,  A_BRO, C_BRO,  PACK_IN, PACK_OUT, X,   Y,   Z,  data_type  kernel_family
 
 #Single GEMM
 if model=='GEMM':
     if DATA_TYPE==1:
-        Versal_config=np.array([[64,64,64,8,4,6,3,2,2,2,4,1,8,1,7,0,9,0,6,0,0,1]]) # INT8
-        #Versal_config=np.array([[64,64,64,12,4,4,2,2,2,2,4,1,8,1,7,0,1,0,4,0,0,1]]) # INT8
+        Versal_config=np.array([[64,64,64,8,4,6,3,2,2,2,4,1,8,1,'kernel_int8_packet',0,9,0,6,0,0,1]], dtype=object) # INT8
+        #Versal_config=np.array([[64,64,64,12,4,4,2,2,2,2,4,1,8,1,'kernel_int8_packet',0,1,0,4,0,0,1]], dtype=object) # INT8
     elif DATA_TYPE==2:
-        Versal_config=np.array([[48,32,48,12,3,8,4,2,3,2,3,2,4,2,5,0,7,0,8,0,0,1]]) # INT16
+        Versal_config=np.array([[48,32,48,12,3,8,4,2,3,2,3,2,4,2,'kernel_int16_packet',0,7,0,8,0,0,1]], dtype=object) # INT16
     elif DATA_TYPE==4:
-        Versal_config=np.array([[32,32,32,12,4,8,4,2,4,4,4,1,4,4,1,0,1,0,8,0,0,1]]) # FP32
+        Versal_config=np.array([[32,32,32,12,4,8,4,2,4,4,4,1,4,4,'kernel_fp32_packet',0,1,0,8,0,0,1]], dtype=object) # FP32
 
 #8 unified 8u
 elif acc=='8_unified':
     if DATA_TYPE==1:
         Versal_config=np.array([
-            [64,64,64,3,2,2,2,3,2,2,2,4,4,1,7,0,6,0,6,1,1,0],
-            [64,64,64,3,2,2,2,3,2,2,2,4,4,1,7,0,10,0,6,1,1,0],
-            [64,64,64,3,2,2,2,3,2,2,2,4,4,1,7,0,14,0,6,1,1,0],
-            [64,64,64,3,2,2,2,3,2,2,2,4,4,1,7,0,18,0,6,1,1,0],
-            [64,64,64,3,2,2,2,3,2,2,2,4,4,1,7,0,22,0,6,1,1,0],
-            [64,64,64,3,2,2,2,3,2,2,2,4,4,1,7,0,26,0,6,1,1,0],
-            [64,64,64,3,2,2,2,3,2,2,2,4,4,1,7,0,30,0,6,1,1,0],
-            [64,64,64,3,2,2,2,3,2,2,2,4,4,1,7,0,34,0,6,1,1,0],
-            ]) # INT8
+            [64,64,64,3,2,2,2,3,2,2,2,4,4,1,'kernel_int8_packet',0,6,0,6,1,1,0],
+            [64,64,64,3,2,2,2,3,2,2,2,4,4,1,'kernel_int8_packet',0,10,0,6,1,1,0],
+            [64,64,64,3,2,2,2,3,2,2,2,4,4,1,'kernel_int8_packet',0,14,0,6,1,1,0],
+            [64,64,64,3,2,2,2,3,2,2,2,4,4,1,'kernel_int8_packet',0,18,0,6,1,1,0],
+            [64,64,64,3,2,2,2,3,2,2,2,4,4,1,'kernel_int8_packet',0,22,0,6,1,1,0],
+            [64,64,64,3,2,2,2,3,2,2,2,4,4,1,'kernel_int8_packet',0,26,0,6,1,1,0],
+            [64,64,64,3,2,2,2,3,2,2,2,4,4,1,'kernel_int8_packet',0,30,0,6,1,1,0],
+            [64,64,64,3,2,2,2,3,2,2,2,4,4,1,'kernel_int8_packet',0,34,0,6,1,1,0],
+            ], dtype=object) # INT8
     elif DATA_TYPE==2:
         Versal_config=np.array([
-            [48,32,48,2,3,4,2,2,3,2,4,1,3,2,5,0,1,0,4,1,0,1],
-            [48,32,48,2,3,4,2,2,3,2,4,1,3,2,5,0,7,0,4,1,0,1],
-            [48,32,48,2,3,4,2,2,3,2,4,1,3,2,5,0,13,0,4,1,0,1],
-            [48,32,48,2,3,4,2,2,3,2,4,1,3,2,5,0,19,0,4,1,0,1],
-            [48,32,48,2,3,4,2,2,3,2,4,1,3,2,5,0,25,0,4,1,0,1],
-            [48,32,48,2,3,4,2,2,3,2,4,1,3,2,5,0,31,0,4,1,0,1],
-            [48,32,48,2,3,4,2,2,3,2,4,1,3,2,5,0,37,0,4,1,0,1],
-            [48,32,48,2,3,4,2,2,3,2,4,1,3,2,5,0,43,0,4,1,0,1],
-            ]) # INT16
+            [48,32,48,2,3,4,2,2,3,2,4,1,3,2,'kernel_int16_packet',0,1,0,4,1,0,1],
+            [48,32,48,2,3,4,2,2,3,2,4,1,3,2,'kernel_int16_packet',0,7,0,4,1,0,1],
+            [48,32,48,2,3,4,2,2,3,2,4,1,3,2,'kernel_int16_packet',0,13,0,4,1,0,1],
+            [48,32,48,2,3,4,2,2,3,2,4,1,3,2,'kernel_int16_packet',0,19,0,4,1,0,1],
+            [48,32,48,2,3,4,2,2,3,2,4,1,3,2,'kernel_int16_packet',0,25,0,4,1,0,1],
+            [48,32,48,2,3,4,2,2,3,2,4,1,3,2,'kernel_int16_packet',0,31,0,4,1,0,1],
+            [48,32,48,2,3,4,2,2,3,2,4,1,3,2,'kernel_int16_packet',0,37,0,4,1,0,1],
+            [48,32,48,2,3,4,2,2,3,2,4,1,3,2,'kernel_int16_packet',0,43,0,4,1,0,1],
+            ], dtype=object) # INT16
 
 if acc=='one_spe':
     #One_spe BERT
     if model=='BERT':
         if DATA_TYPE==1:
-            Versal_config=np.array([[64,64,64,8,4,4,2,2,2,2,1,1,2,1,7,0,9,0,4,0,1,0]]) # INT8
+            Versal_config=np.array([[64,64,64,8,4,4,2,2,2,2,1,1,2,1,'kernel_int8_packet',0,9,0,4,0,1,0]], dtype=object) # INT8
         elif DATA_TYPE==2:
-            Versal_config=np.array([[48,32,48,12,3,6,3,2,3,2,1,1,2,2,5,0,8,0,6,1,1,0]]) # INT16
+            Versal_config=np.array([[48,32,48,12,3,6,3,2,3,2,1,1,2,2,'kernel_int16_packet',0,8,0,6,1,1,0]], dtype=object) # INT16
 
     #One_spe ViT
     elif model=='ViT':
         if DATA_TYPE==1:
-            Versal_config=np.array([[64,64,64,4,4,4,2,2,2,2,1,1,1,1,7,0,17,0,4,0,0,0]]) # INT8
+            Versal_config=np.array([[64,64,64,4,4,4,2,2,2,2,1,1,1,1,'kernel_int8_packet',0,17,0,4,0,0,0]], dtype=object) # INT8
         elif DATA_TYPE==2:
-            Versal_config=np.array([[48,32,48,4,6,4,2,2,3,2,1,1,1,2,5,0,13,0,4,0,0,0]]) # INT16
+            Versal_config=np.array([[48,32,48,4,6,4,2,2,3,2,1,1,1,2,'kernel_int16_packet',0,13,0,4,0,0,0]], dtype=object) # INT16
 
     #One_spe NCF
     elif model=='NCF':
         if DATA_TYPE==1:
-            Versal_config=np.array([[64,64,64,12,4,4,2,2,2,2,1,4,1,1,7,0,1,0,4,1,1,0]]) # INT8
+            Versal_config=np.array([[64,64,64,12,4,4,2,2,2,2,1,4,1,1,'kernel_int8_packet',0,1,0,4,1,1,0]], dtype=object) # INT8
         elif DATA_TYPE==2:
-            Versal_config=np.array([[48,32,48,16,3,6,3,2,3,2,2,1,4,2,5,0,1,0,6,0,0,1]]) # INT16
+            Versal_config=np.array([[48,32,48,16,3,6,3,2,3,2,2,1,4,2,'kernel_int16_packet',0,1,0,6,0,0,1]], dtype=object) # INT16
     
     #One_spe MLP
     elif model=='MLP':
         if DATA_TYPE==1:
-            Versal_config=np.array([[64,64,64,12,4,4,2,2,2,2,4,1,8,1,7,0,1,0,4,0,0,1]]) # INT8
+            Versal_config=np.array([[64,64,64,12,4,4,2,2,2,2,4,1,8,1,'kernel_int8_packet',0,1,0,4,0,0,1]], dtype=object) # INT8
         elif DATA_TYPE==2:
-            Versal_config=np.array([[48,32,48,16,3,6,3,2,3,2,2,1,5,2,5,0,1,0,6,0,0,1]]) # INT16
+            Versal_config=np.array([[48,32,48,16,3,6,3,2,3,2,2,1,5,2,'kernel_int16_packet',0,1,0,6,0,0,1]], dtype=object) # INT16
             
 elif acc=='two_div':
     #two_div BERT
     if model=='BERT':
         if DATA_TYPE==1:
             Versal_config=np.array([
-                [64,64,64,8,4,4,2,2,2,2,2,4,4,1,7,0,6,0,4,1,1,0],
-                [64,64,64,4,2,2,1,2,2,2,1,1,1,1,7,0,39,0,4,1,1,0],
-                ]) # INT8
+                [64,64,64,8,4,4,2,2,2,2,2,4,4,1,'kernel_int8_packet',0,6,0,4,1,1,0],
+                [64,64,64,4,2,2,1,2,2,2,1,1,1,1,'kernel_int8_packet',0,39,0,4,1,1,0],
+                ], dtype=object) # INT8
         elif DATA_TYPE==2:
             Versal_config=np.array([
-                [48,32,48,4,3,8,4,2,3,2,8,4,3,2,5,0,8,0,8,1,0,1],
-                [48,32,48,4,3,2,2,2,3,2,1,1,1,2,5,0,26,0,2,1,0,1],
-                ]) # INT16
+                [48,32,48,4,3,8,4,2,3,2,8,4,3,2,'kernel_int16_packet',0,8,0,8,1,0,1],
+                [48,32,48,4,3,2,2,2,3,2,1,1,1,2,'kernel_int16_packet',0,26,0,2,1,0,1],
+                ], dtype=object) # INT16
 
     #two_div ViT
     elif model=='ViT':
         if DATA_TYPE==1:
             Versal_config=np.array([
-                [64,64,64,8,4,4,2,2,2,2,2,4,4,1,7,0,6,0,4,1,1,0],
-                [64,64,64,1,2,2,1,1,2,2,1,1,1,1,7,0,39,0,2,1,1,0],
-                ]) # INT8
+                [64,64,64,8,4,4,2,2,2,2,2,4,4,1,'kernel_int8_packet',0,6,0,4,1,1,0],
+                [64,64,64,1,2,2,1,1,2,2,1,1,1,1,'kernel_int8_packet',0,39,0,2,1,1,0],
+                ], dtype=object) # INT8
         elif DATA_TYPE==2:
             Versal_config=np.array([
-                [48,32,48,4,3,8,4,2,3,2,8,4,3,2,5,0,8,0,8,1,0,1],
-                [48,32,48,2,3,2,2,2,3,2,1,1,1,2,5,0,26,0,2,1,0,1],
-                ]) # INT16
+                [48,32,48,4,3,8,4,2,3,2,8,4,3,2,'kernel_int16_packet',0,8,0,8,1,0,1],
+                [48,32,48,2,3,2,2,2,3,2,1,1,1,2,'kernel_int16_packet',0,26,0,2,1,0,1],
+                ], dtype=object) # INT16
     
     #two_div NCF
     elif model=='NCF':
         if DATA_TYPE==1:
             Versal_config=np.array([
-                [64,64,64,8,4,4,2,2,2,2,3,2,8,1,7,0,6,0,4,0,1,1],
-                [64,64,64,4,2,4,2,2,2,2,2,4,2,1,7,0,39,4,4,1,1,0],
-                ]) # INT8
+                [64,64,64,8,4,4,2,2,2,2,3,2,8,1,'kernel_int8_packet',0,6,0,4,0,1,1],
+                [64,64,64,4,2,4,2,2,2,2,2,4,2,1,'kernel_int8_packet',0,39,4,4,1,1,0],
+                ], dtype=object) # INT8
         elif DATA_TYPE==2:
             Versal_config=np.array([
-                [48,32,48,8,3,8,4,2,3,2,4,1,3,2,5,0,6,0,8,0,0,1],
-                [48,32,48,4,3,8,4,2,3,2,8,1,1,2,5,0,32,0,8,0,0,1],
-                ]) # INT16
+                [48,32,48,8,3,8,4,2,3,2,4,1,3,2,'kernel_int16_packet',0,6,0,8,0,0,1],
+                [48,32,48,4,3,8,4,2,3,2,8,1,1,2,'kernel_int16_packet',0,32,0,8,0,0,1],
+                ], dtype=object) # INT16
     
     #two_div MLP
     elif model=='MLP':
         if DATA_TYPE==1:
             Versal_config=np.array([
-                [64,64,64,8,4,4,2,2,2,2,3,2,8,1,7,0,6,0,4,0,1,1],
-                [64,64,64,3,4,4,2,3,2,2,4,1,4,1,7,0,32,4,4,0,0,1],
-                ]) # INT8
+                [64,64,64,8,4,4,2,2,2,2,3,2,8,1,'kernel_int8_packet',0,6,0,4,0,1,1],
+                [64,64,64,3,4,4,2,3,2,2,4,1,4,1,'kernel_int8_packet',0,32,4,4,0,0,1],
+                ], dtype=object) # INT8
 
 AIE_NAME= str(Versal_config[0,3]) + str(Versal_config[0,4]) + str(Versal_config[0,5])
 BUF_NAME= str(Versal_config[0,10]) + str(Versal_config[0,11]) + str(Versal_config[0,12])

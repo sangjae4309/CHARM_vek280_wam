@@ -1,7 +1,7 @@
 # INT16 원본 커널과 그래프
 
 확인일: 2026-11-09. 상태: 소스 읽기 확인. 이 문서는 실행 검증 보고서가 아니다.
-범위는 `templates/aie/kernel5/aie/`이며 다른 커널 계열 전체로 일반화하지 않는다.
+범위는 `templates/aie/kernel_int16_packet/aie/`이며 다른 커널 계열 전체로 일반화하지 않는다.
 
 ## kernel0/1/2/3의 관계
 
@@ -15,19 +15,19 @@
 | kernel2 | cascade 입력 (`readincr_v8`) | 자신의 부분곱을 더한 뒤 `srs(acc, 0)`으로 INT16 window에 저장 |
 | kernel3 | 0 (`null_v16acc48`) | 자신의 곱셈을 완료한 뒤 `srs(acc, 0)`으로 INT16 window에 저장 |
 
-근거: [kernel0](../../templates/aie/kernel5/aie/mm5_kernel0.cc),
-[kernel1](../../templates/aie/kernel5/aie/mm5_kernel1.cc),
-[kernel2](../../templates/aie/kernel5/aie/mm5_kernel2.cc),
-[kernel3](../../templates/aie/kernel5/aie/mm5_kernel3.cc).
+근거: [kernel0](../../templates/aie/kernel_int16_packet/aie/mm5_kernel0.cc),
+[kernel1](../../templates/aie/kernel_int16_packet/aie/mm5_kernel1.cc),
+[kernel2](../../templates/aie/kernel_int16_packet/aie/mm5_kernel2.cc),
+[kernel3](../../templates/aie/kernel_int16_packet/aie/mm5_kernel3.cc).
 
-현재 [aie_graph.h](../../templates/aie/kernel5/aie/aie_graph.h)는
+현재 [aie_graph.h](../../templates/aie/kernel_int16_packet/aie/aie_graph.h)는
 첫 인스턴스에 kernel0, 마지막에 kernel2, 중간에 kernel1을 배치한다.
 인스턴스 사이에는 `connect<cascade>`를 사용한다. kernel3를 생성하는 분기는 없다.
 따라서 kernel3는 단독 계산용 함수이지만 현재 그래프의 활성 실행 경로는 아니다.
 
 ## 세 조각으로 고정된 것이 아니다
 
-[para.h](../../templates/aie/kernel5/aie/para.h)의 `NUM_KERNEL={{B}}`가
+[para.h](../../templates/aie/kernel_int16_packet/aie/para.h)의 `NUM_KERNEL={{B}}`가
 cascade 길이를 정한다. 입력 행렬 B와 이 설정값 B는 다른 개념이다.
 
 - B=2: kernel0 → kernel2.

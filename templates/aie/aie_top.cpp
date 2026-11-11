@@ -26,7 +26,7 @@ public:
 {% for k in range(B//PACK_IN) -%}
 {% set port = k+j*(B//PACK_IN)+i*(C//A_BRO)*(B//PACK_IN) %}
         lhs[{{port}}] = adf::input_plio::create(
-            "LHS_in{{port}}_L{{layer}}", adf::plio_{{port_width}}_bits, "data/input0.txt", {{freq}});
+            "LHS_in{{port}}_L{{layer}}", adf::plio_{{port_width}}_bits, {{ input_files[layer][0] | tojson }}, {{freq}});
         adf::connect<>(lhs[{{port}}].out[0], compute.in_lhs[{{j+i*(C//A_BRO)}}][{{k}}]);
 {% endfor -%}
 {% endfor -%}
@@ -36,7 +36,7 @@ public:
 {% for k in range(B//PACK_IN) -%}
 {% set port = k+i*(B//PACK_IN)+j*(A//C_BRO)*(B//PACK_IN) %}
         rhs[{{port}}] = adf::input_plio::create(
-            "RHS_in{{port}}_L{{layer}}", adf::plio_{{port_width}}_bits, "data/input1.txt", {{freq}});
+            "RHS_in{{port}}_L{{layer}}", adf::plio_{{port_width}}_bits, {{ input_files[layer][1] | tojson }}, {{freq}});
         adf::connect<>(rhs[{{port}}].out[0], compute.in_rhs[{{i+j*(A//C_BRO)}}][{{k}}]);
 {% endfor -%}
 {% endfor -%}
@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
     mm_graph{{layer}}.init();
 {% endfor %}
 {% for layer in L_list %}
-    mm_graph{{layer}}.run(4);
+    mm_graph{{layer}}.run({{simulation_iterations[layer]}});
 {% endfor %}
 {% for layer in L_list %}
     mm_graph{{layer}}.end();

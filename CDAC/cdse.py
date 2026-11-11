@@ -32,11 +32,11 @@ def cdse_top(MODEL_IN,HW_Part,DATA_TYPE):
         if AIE_NUM<=50:
             PACK_IN = 1
             PACK_OUT= 1
-            kernel_type=6
+            kernel_family="kernel_int8_stream"
         else:
             PACK_IN = 2
             PACK_OUT= 2
-            kernel_type=7
+            kernel_family="kernel_int8_packet"
     elif DATA_TYPE==2:
         H1,W1,W2=[48,32,48]
         PI,PK,PJ=[16,32,2]
@@ -45,11 +45,11 @@ def cdse_top(MODEL_IN,HW_Part,DATA_TYPE):
         if AIE_NUM<=50:
             PACK_IN = 1
             PACK_OUT= 1
-            kernel_type=4
+            kernel_family="kernel_int16_stream"
         else:
             PACK_IN = 3
             PACK_OUT= 2
-            kernel_type=5
+            kernel_family="kernel_int16_packet"
     elif DATA_TYPE==4:
         H1,W1,W2=[32,32,32]
         PI,PK,PJ=[8,8,2]
@@ -58,11 +58,11 @@ def cdse_top(MODEL_IN,HW_Part,DATA_TYPE):
         if AIE_NUM<=100:
             PACK_IN = 1
             PACK_OUT= 1
-            kernel_type=0
+            kernel_family="kernel_fp32_stream"
         else:
             PACK_IN = 4
             PACK_OUT= 4
-            kernel_type=1
+            kernel_family="kernel_fp32_packet"
     
     #Buffer Configurations
     RAM_TYPE_A=2 #"1":1P "2":T2P
@@ -137,7 +137,7 @@ def cdse_top(MODEL_IN,HW_Part,DATA_TYPE):
             for a in range(1, AIE_NUM//(b*c)+2):
                 if (force_assign==1) and ((a!=A) or (b!=B) or (c!=C)):
                     continue
-                if kernel_type%2==1:
+                if kernel_family.endswith("_packet"):
                     A_BRO = c//2
                     height=min(c,8)
                     if  a%2==0:
@@ -245,14 +245,14 @@ def cdse_top(MODEL_IN,HW_Part,DATA_TYPE):
     config = config[config[:,0].argsort()]
     best_cycle=config[0,0]
     Versal_HW_temp=config[0,:].copy()
-    Versal_HW=np.zeros([1,15]) # h1,   w1,   w2,   A,   B,   C,  A_BRO, C_BRO,  PACK_IN, PACK_OUT, X,   Y,   Z,  data_type  kernel_type
+    Versal_HW=np.zeros([1,15], dtype=object) # h1,   w1,   w2,   A,   B,   C,  A_BRO, C_BRO,  PACK_IN, PACK_OUT, X,   Y,   Z,  data_type  kernel_family
     Versal_HW[0,0:3]=[H1,W1,W2]
     Versal_HW[0,3:8]=Versal_HW_temp[1:6].copy()
     Versal_HW[0,8]=PACK_IN
     Versal_HW[0,9]=PACK_OUT
     Versal_HW[0,10:13]=Versal_HW_temp[6:9].copy()
     Versal_HW[0,13]=DATA_TYPE
-    Versal_HW[0,14]=kernel_type  
+    Versal_HW[0,14]=kernel_family
 
     placement=np.zeros([1,4]) #layer,col,row,height 
     col=(50-Versal_HW_temp[9])//2
@@ -269,6 +269,8 @@ def cdse_top(MODEL_IN,HW_Part,DATA_TYPE):
     
     final_temp=np.concatenate((Versal_HW, placement), axis=1)
     final_config=np.concatenate((final_temp,BUFF_SEL),axis=1)
+    final_config[:,:14] = final_config[:,:14].astype(int)
+    final_config[:,15:] = final_config[:,15:].astype(int)
     bram_use,uram_use,buf_index=buff_count_0(BRAM,URAM,PART_A,PART_B,PART_C,PACK_IN,PACK_OUT,LEFT_SIZE,RIGHT_SIZE,OUT_SIZE,Versal_HW[0,3],Versal_HW[0,4],Versal_HW[0,5],Versal_HW[0,10],Versal_HW[0,11],Versal_HW[0,12],DBUFF_L,DBUFF_R,DBUFF_O,RAM_TYPE_A,RAM_TYPE_B,RAM_TYPE_C,DATA_TYPE,force_assign,buf_sel) 
     HW_Used=[config[0,13],config[0,11],config[0,12],bram_use,uram_use]#AIE,PLIO_IN,PLIO_OUT,BRAM_URAM
     return final_config,best_cycle,config[0,num_term:num_term+sample_num],HW_Used

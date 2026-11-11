@@ -4,22 +4,22 @@ import numpy as np
 import subprocess
 import os
 from .gen_krl import*
+from ..kernel_families import KERNEL_FAMILIES
 
 def gen_pl_top(prj_dir,template_dir,hw_config,BUFF_SEL):
-    kernel_type_num=8
     num_krl=hw_config.shape[0]
     pl_dir= prj_dir + '/kernel'
     gen_conn_top(prj_dir,template_dir,hw_config)
     for acc in range(num_krl):
-        h1,w1,w2,A,B,C,A_BRO,C_BRO,PACK_IN,PACK_OUT,X,Y,Z,data_type,kernel_type=hw_config[acc,:]
+        h1,w1,w2,A,B,C,A_BRO,C_BRO,PACK_IN,PACK_OUT,X,Y,Z,data_type=np.asarray(hw_config[acc,:14],dtype=int)
+        family=hw_config[acc,14]
+        if family not in KERNEL_FAMILIES:
+            raise ValueError(f"Use a supported template family name, not a numeric ID: {family!r}")
+        if data_type != KERNEL_FAMILIES[family]['bytes']:
+            raise ValueError(f"Element width does not match {family}")
         pl_dir_krl=pl_dir + str(acc)
         subprocess.run(['mkdir','-p' ,f'{pl_dir_krl}'])
-        template_path=[None]*kernel_type_num
-        environment=[None]*kernel_type_num
-        ### Define template PATH
-        for i in range (kernel_type_num):
-            template_path[i] = template_dir+"/kernel"+ str(i)
-            environment[i] = Environment(loader=FileSystemLoader(template_path[i]))
+        environment = Environment(loader=FileSystemLoader(os.path.join(template_dir, family)))
 
         krl_folder = Path(pl_dir_krl)
         
@@ -30,15 +30,15 @@ def gen_pl_top(prj_dir,template_dir,hw_config,BUFF_SEL):
             else:
                 BUFF_SEL_TEXT[i]='URAM'
 
-        gen_para(environment[kernel_type],h1,w1,w2,A,B,C,A_BRO,C_BRO,PACK_IN,PACK_OUT,X,Y,Z,data_type,acc,krl_folder)
-        gen_ddr (environment[kernel_type],acc,krl_folder)
-        gen_send(environment[kernel_type],A,C,A_BRO,C_BRO,PACK_IN,PACK_OUT,acc,krl_folder)
-        gen_compute(environment[kernel_type],A,B,C,A_BRO,C_BRO,PACK_IN,PACK_OUT,BUFF_SEL_TEXT,acc,krl_folder)
-        gen_krl_top(environment[kernel_type],A,B,C,A_BRO,C_BRO,PACK_IN,PACK_OUT,acc,krl_folder)
+        gen_para(environment,h1,w1,w2,A,B,C,A_BRO,C_BRO,PACK_IN,PACK_OUT,X,Y,Z,data_type,acc,krl_folder)
+        gen_ddr (environment,acc,krl_folder)
+        gen_send(environment,A,C,A_BRO,C_BRO,PACK_IN,PACK_OUT,acc,krl_folder)
+        gen_compute(environment,A,B,C,A_BRO,C_BRO,PACK_IN,PACK_OUT,BUFF_SEL_TEXT,acc,krl_folder)
+        gen_krl_top(environment,A,B,C,A_BRO,C_BRO,PACK_IN,PACK_OUT,acc,krl_folder)
 
 def gen_conn_top(prj_dir,template_dir,hw_config):
     prj_folder = Path(prj_dir)
-    Conn_Array_temp = hw_config[:,3:10]
+    Conn_Array_temp = np.asarray(hw_config[:,3:10],dtype=int)
     num_layer = hw_config.shape[0]
     Conn_Array=np.zeros((num_layer,7)).astype(int)
     Conn_Array[:,0:3]=Conn_Array_temp[:,0:3]

@@ -47,7 +47,7 @@ def cdac_top(MODEL_IN,DATA_TYPE,num_acc):
             HW_Used=np.zeros(5)
             HW_Cur=np.ones(6)*DDR_BANK
             total_ops_nxt=total_ops
-            temp_config = np.zeros((num_acc,22))
+            temp_config = np.zeros((num_acc,22), dtype=object)
             temp_cycle = np.zeros((num_acc,1))
             layer_cycle_temp = np.zeros((num_layer))
             ### Create the Partitions of the Model

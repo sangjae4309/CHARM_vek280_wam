@@ -3,18 +3,31 @@ import math
 import sys
 from .broadcast_tuning import *
 from .buffer_sel import *
+from .devices import device_resources, validate_int8_memory
 
 
-def cdse_top(Op0,Op1):
+def cdse_top(Op0,Op1,device="vck190", *, resource_limits=None,
+             compute_cycles=None, bandwidth_scale=1.0, return_details=False,
+             workload=None, aie_only=False):
+    device = device.lower()
+    resources = device_resources(device, resource_limits)
+    if not math.isfinite(bandwidth_scale) or bandwidth_scale <= 0:
+        raise ValueError("bandwidth_scale must be positive and finite")
+    if compute_cycles is not None and (not math.isfinite(compute_cycles) or compute_cycles <= 0):
+        raise ValueError("compute_cycles must be positive and finite")
+    if device == "vek280" and (Op0.dtype != np.int8 or Op1.dtype != np.int8):
+        raise ValueError("VEK280 DSE currently models the ported INT8/INT8 kernel only; packed INT4 is not implemented")
     MODEL_IN=np.ones([1,4])
     MODEL_IN[0,0]=Op0.shape[0]
     MODEL_IN[0,1]=Op0.shape[1]
     MODEL_IN[0,2]=Op1.shape[1]
+    if workload is not None:
+        MODEL_IN = np.asarray(workload, dtype=np.int64)
+        if MODEL_IN.ndim != 2 or MODEL_IN.shape[1] != 4 or np.any(MODEL_IN <= 0):
+            raise ValueError("workload must contain positive [M, K, N, count] rows")
     if Op0.shape[1]!=Op1.shape[0]:
-        print("\n\n")
         sys.exit("Dim 1 of Matix 0 doesn't match Dim 0 of Matrix 1\n\n")
     if Op0.dtype!=Op1.dtype:
-        print("\n\n")
         sys.exit("Currently operands with the same data types are supported\n\n")
     if Op0.dtype==np.float32:
         DATA_TYPE=4
@@ -22,6 +35,8 @@ def cdse_top(Op0,Op1):
         DATA_TYPE=2
     elif Op0.dtype==np.int8:
         DATA_TYPE=1
+    else:
+        raise ValueError("Supported operand types: float32, int16, int8")
 
     total_ops = np.sum(np.multiply(np.multiply(np.multiply(MODEL_IN[:,0],MODEL_IN[:,1]),MODEL_IN[:,2]),MODEL_IN[:,3]))*2
 
@@ -29,11 +44,13 @@ def cdse_top(Op0,Op1):
     portion=1
     force_assign=0
     DDR_BANK=1
-    AIE_NUM=400
-    BRAM=(967-100) #100 for AXI bound consumpssion
-    URAM=(463-43)
-    PLIO_IN=100
-    PLIO_OUT=80
+    AIE_NUM=resources["aie_num"]
+    BRAM=resources["bram"]
+    URAM=resources["uram"]
+    PLIO_IN=resources["plio_in"]
+    PLIO_OUT=resources["plio_out"]
+    AIE_COLS=resources["aie_cols"]
+    AIE_ROWS=resources["aie_rows"]
 
 
     ################ Hardware Setting ################
@@ -50,7 +67,7 @@ def cdse_top(Op0,Op1):
         COMPUTE_CYCLE=(PI*PK*PJ//mac+4)*(H1//PI)*(W1//PK)*(W2//PJ)+40 #60: Acc_stall
         PACK_IN = 2
         PACK_OUT= 2
-        kernel_type=7
+        kernel_family="kernel_int8_packet"
     elif DATA_TYPE==2:
         H1,W1,W2=[48,32,48]
         PI,PK,PJ=[16,32,2]
@@ -58,7 +75,7 @@ def cdse_top(Op0,Op1):
         COMPUTE_CYCLE=(PI*PK*PJ//mac+4)*(H1//PI)*(W1//PK)*(W2//PJ)+40 #50: Acc_stall
         PACK_IN = 3
         PACK_OUT= 2
-        kernel_type=5
+        kernel_family="kernel_int16_packet"
     elif DATA_TYPE==4:
         H1,W1,W2=[32,32,32]
         PI,PK,PJ=[8,8,2]
@@ -66,7 +83,13 @@ def cdse_top(Op0,Op1):
         COMPUTE_CYCLE=(PI*PK*PJ//mac+1)*(H1//PI)*(W1//PK)*(W2//PJ)+40 #40: Acc_stall
         PACK_IN = 4
         PACK_OUT= 4
-        kernel_type=1
+        kernel_family="kernel_fp32_packet"
+
+    if compute_cycles is not None:
+        COMPUTE_CYCLE = compute_cycles
+    memory_check = None
+    if device == "vek280":
+        memory_check = validate_int8_memory(H1, W1, W2, resources["local_memory_bytes"])
 
     #Buffer Configurations
     RAM_TYPE_A=2 #"1":1P "2":T2P
@@ -103,7 +126,7 @@ def cdse_top(Op0,Op1):
     OUT_SIZE  =H1*W2//NUM_PER_PORT_C
 
     # PL Frequency
-    freq_rate=230/250
+    freq_rate=(230/250)*bandwidth_scale
 
     # One-Time Profling of DDR Bandwidth
     BW_L_S=(14*DDR_BANK)*freq_rate
@@ -131,22 +154,21 @@ def cdse_top(Op0,Op1):
     num_design_best=50    #At most 50 choices reserved for the current best
     num_design_choice=50  #At most 50 choices reserved for the near best point
     temp_cycle=np.zeros([1,sample_num])
-    config=np.zeros([num_design_best+num_design_choice,num_term+sample_num-1])
+    config=np.zeros([num_design_best+num_design_choice,num_term+sample_num])
 
     A,B,C,X,Y,Z,buf_sel=[12,4,8,4,1,4,1]
     ############################ DSE Kernel0 ###############################
 
-    for c in range(1, 8+1):      ##Row Constaint
-        print("DSE Processes ------------ " + str(12.5*c) + "%")
-        for b in range(1, 50+1): ##Col Constaint
+    for c in range(1, AIE_ROWS+1):
+        for b in range(1, AIE_COLS+1):
             for a in range(1, AIE_NUM//(c*b)+1): 
                 if (force_assign==1) and ((a!=A) or (b!=B) or (c!=C)):
                     continue
                 if (DATA_TYPE==2) and (a%2!=0):
                   continue
-                if kernel_type%2==1:
+                if kernel_family.endswith("_packet"):
                     A_BRO = c//2
-                    height=min(c,8)
+                    height=min(c,AIE_ROWS)
                     if  a%2==0:
                         C_BRO=2
                     elif a%3==0:
@@ -169,20 +191,25 @@ def cdse_top(Op0,Op1):
                 plio_in_rhs= c*(b//PACK_IN)*(a//C_BRO)
                 plio_in=plio_in_lhs + plio_in_rhs
                 plio_out=a*(c//PACK_OUT)
-                if plio_in>PLIO_IN or plio_out>PLIO_OUT:
+                if not aie_only and (plio_in>PLIO_IN or plio_out>PLIO_OUT):
                     continue
 
                 ############ Verify Placement ###########
                 length=placement_verify(a,b,c,height)
-                if length > 50:
+                if length > AIE_COLS or height > AIE_ROWS:
                     continue
 
-                for x in range(1, 16):
-                    for y in range(1, 16): 
-                        for z in range(1, 16):
+                # X/Y/Z aggregate PL system buffers. AIE-only maps repeated
+                # kernel passes directly, without claiming those PL buffers.
+                for x in range(1, 2 if aie_only else 16):
+                    for y in range(1, 2 if aie_only else 16):
+                        for z in range(1, 2 if aie_only else 16):
                             if (force_assign==1) and ((x!=X) or (y!=Y) or (z!=Z)):
                                 continue
-                            bram_use,uram_use,buf_index=buff_count_0(BRAM,URAM,PART_A,PART_B,PART_C,PACK_IN,PACK_OUT,LEFT_SIZE,RIGHT_SIZE,OUT_SIZE,a,b,c,x,y,z,DBUFF_L,DBUFF_R,DBUFF_O,RAM_TYPE_A,RAM_TYPE_B,RAM_TYPE_C,DATA_TYPE,force_assign,buf_sel)
+                            if aie_only:
+                                bram_use,uram_use,buf_index = 0,0,0
+                            else:
+                                bram_use,uram_use,buf_index=buff_count_0(BRAM,URAM,PART_A,PART_B,PART_C,PACK_IN,PACK_OUT,LEFT_SIZE,RIGHT_SIZE,OUT_SIZE,a,b,c,x,y,z,DBUFF_L,DBUFF_R,DBUFF_O,RAM_TYPE_A,RAM_TYPE_B,RAM_TYPE_C,DATA_TYPE,force_assign,buf_sel)
                             if (bram_use>BRAM or uram_use>URAM):
                                 break
 
@@ -209,7 +236,9 @@ def cdse_top(Op0,Op1):
                                 Y_TILE=math.ceil(K/(y*b*W1))
                                 Z_TILE=math.ceil(N/(z*c*W2))
 
-                                if Y_TILE==1 and X_TILE==1 and Z_TILE==1:
+                                if aie_only:
+                                    temp_cycle[0,large_t]=AIE_CYCLE*X_TILE*Y_TILE*Z_TILE
+                                elif Y_TILE==1 and X_TILE==1 and Z_TILE==1:
                                     temp_cycle[0,large_t]=max([load_L_DR,load_R_DL])+AIE_CYCLE+store_O_S
                                 elif Y_TILE==1:
                                     temp_cycle[0,large_t]=max([load_L_DR,load_R_DL])+max([load_L_DR,load_R_DL,AIE_CYCLE])+max([AIE_CYCLE,store_O_S])+max([load_L_T,load_R_T,AIE_CYCLE,store_O_T])*(X_TILE*Y_TILE*Z_TILE-2)+store_O_S
@@ -248,20 +277,22 @@ def cdse_top(Op0,Op1):
                                 config[index,num_term:num_term+sample_num]=temp0_cycle[:].copy()
 
     
+    if cnt_best == 0:
+        raise ValueError("No configuration fits the selected device/resource budgets")
     config = config[config[:,0].argsort()[::-1]]
 
     Versal_HW_temp=config[0,:].copy()
-    Versal_HW=np.zeros([1,15]) # h1,   w1,   w2,   A,   B,   C,  A_BRO, C_BRO,  PACK_IN, PACK_OUT, X,   Y,   Z,  data_type  kernel_type
+    Versal_HW=np.zeros([1,15], dtype=object) # h1,   w1,   w2,   A,   B,   C,  A_BRO, C_BRO,  PACK_IN, PACK_OUT, X,   Y,   Z,  data_type  kernel_family
     Versal_HW[0,0:3]=[H1,W1,W2]
     Versal_HW[0,3:8]=Versal_HW_temp[1:6].copy()
     Versal_HW[0,8]=PACK_IN
     Versal_HW[0,9]=PACK_OUT
     Versal_HW[0,10:13]=Versal_HW_temp[6:9].copy()
     Versal_HW[0,13]=DATA_TYPE
-    Versal_HW[0,14]=kernel_type  
+    Versal_HW[0,14]=kernel_family
 
     placement=np.zeros([1,4]) #layer,col,row,height 
-    col=(50-Versal_HW_temp[9])//2
+    col=(AIE_COLS-Versal_HW_temp[9])//2
     row=0
     placement[0,1:4]=[col,row,Versal_HW_temp[10]] 
 
@@ -275,7 +306,27 @@ def cdse_top(Op0,Op1):
     
     final_temp=np.concatenate((Versal_HW, placement), axis=1)
     final_config=np.concatenate((final_temp,BUFF_SEL),axis=1)
-    bram_use,uram_use,buf_index=buff_count_0(BRAM,URAM,PART_A,PART_B,PART_C,PACK_IN,PACK_OUT,LEFT_SIZE,RIGHT_SIZE,OUT_SIZE,Versal_HW[0,3],Versal_HW[0,4],Versal_HW[0,5],Versal_HW[0,10],Versal_HW[0,11],Versal_HW[0,12],DBUFF_L,DBUFF_R,DBUFF_O,RAM_TYPE_A,RAM_TYPE_B,RAM_TYPE_C,DATA_TYPE,force_assign,buf_sel) 
+    final_config[:,:14] = final_config[:,:14].astype(int)
+    final_config[:,15:] = final_config[:,15:].astype(int)
+    if not aie_only:
+        bram_use,uram_use,buf_index=buff_count_0(BRAM,URAM,PART_A,PART_B,PART_C,PACK_IN,PACK_OUT,LEFT_SIZE,RIGHT_SIZE,OUT_SIZE,Versal_HW[0,3],Versal_HW[0,4],Versal_HW[0,5],Versal_HW[0,10],Versal_HW[0,11],Versal_HW[0,12],DBUFF_L,DBUFF_R,DBUFF_O,RAM_TYPE_A,RAM_TYPE_B,RAM_TYPE_C,DATA_TYPE,force_assign,buf_sel)
+    if return_details:
+        return final_config, {
+            "device": device, "kernel_family": kernel_family, "resources": resources, "local_memory_check": memory_check,
+            "kernel_tile_MKN": [H1,W1,W2], "kernel_compute_cycles": COMPUTE_CYCLE,
+            "compute_cost_source": "legacy_CHARM_estimate" if compute_cycles is None else "caller_supplied",
+            "DDR_cost_source": "excluded" if aie_only else "legacy_CHARM_bandwidths_scaled", "bandwidth_scale": bandwidth_scale,
+            "performance_calibrated": False, "weight_bits": DATA_TYPE*8,
+            "packed_int4_supported": False, "memory_tiles_used": 0,
+            "selected_model_cycles": total_ops/Versal_HW_temp[0],
+            "selected_aie_count": int(Versal_HW_temp[13]),
+            "selected_bram": int(Versal_HW_temp[14]), "selected_uram": int(Versal_HW_temp[15]),
+            "selected_plio_in": int(Versal_HW_temp[11]), "selected_plio_out": int(Versal_HW_temp[12]),
+            "placement_width": int(Versal_HW_temp[9]), "placement_height": int(Versal_HW_temp[10]),
+            "workload_MKN_count": MODEL_IN.astype(int).tolist(),
+            "cycles_per_invocation": (config[0,num_term:num_term+sample_num]/MODEL_IN[:,3]).tolist(),
+            "scope": "aie_mm_service_cycles" if aie_only else "charm_system",
+            "pl_resources_allocated": not aie_only,
+            "routing_verified": False,
+        }
     return final_config
-        
-            

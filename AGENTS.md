@@ -32,6 +32,18 @@
 
 ## Repository work
 
+- Keep model-specific workloads, mapping policies, generators and templates under
+  `example/<Model>/`. Keep `CACG/`, `CDAC/`, `CDSE/` and shared templates model-agnostic.
+  Experiment cases may keep thin launchers and case-owned artifacts. This is the
+  user's explicit organization preference, confirmed on 2026-11-11.
+- Keep CHARM DSE runners minimal and directly executable with no arguments.
+  Do not add CLI parsers, option modes, or try/except wrappers. Express workload
+  shapes and settings directly using NumPy arrays and direct CHARM DSE calls.
+  Do not add helper-function frameworks, JSON/file-driven workload construction,
+  report generation, or unnecessary prints. Keep results in plainly named
+  variables; add output files only when requested. Let failures propagate
+  naturally. This is the user's
+  explicit persistent preference, confirmed on 2026-11-10.
 - Inspect the working tree and relevant source before editing. Preserve user
   changes, editor swap files, the existing `sim` symlink, and unrelated artifacts.
 - Modify generator templates when implementing generated behavior; avoid treating

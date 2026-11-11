@@ -104,7 +104,7 @@ The port does not claim all CHARM configurations are VEK280-compatible.
 
 ## Files and regeneration
 
-Changes are in `templates/aie/kernel5/aie/`, not only in generated case files.
+Changes are in `templates/aie/kernel_int16_packet/aie/`, not only in generated case files.
 Other kernel templates and CHARM generator code are untouched. These kernel5
 templates now target AIE-ML; this is not a dual-target AIE1/AIE-ML implementation.
 

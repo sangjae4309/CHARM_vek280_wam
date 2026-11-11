@@ -11,8 +11,8 @@ class charm:
     def __init__(self, prj_dir='.'):  
         self.prj_dir = prj_dir  
         
-    def cdse(self,A,B):
-        final_config=cdse_top(A,B)
+    def cdse(self,A,B,device="vck190",**options):
+        final_config=cdse_top(A,B,device=device,**options)
         return final_config
     
     def cacg(self,final_config,device):

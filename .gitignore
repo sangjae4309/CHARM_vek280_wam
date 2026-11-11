@@ -4,4 +4,5 @@ prj_try
 build*
 
 *sim/
+*sim-hdd/
 visualization/

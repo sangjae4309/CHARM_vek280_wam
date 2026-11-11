@@ -17,6 +17,8 @@ class mm_k6_B{{B}}_L{{layer}}: public graph {
     port<output> out;
     
     mm_k6_B{{B}}_L{{layer}}() {
+      const int first_col = (ROW_OFFSET % 2 == 0)
+          ? COL_OFFSET : COL_OFFSET - L{{layer}}_NUM_KERNEL + 1;
       {% if B ==1 %}
       mm[0] = kernel::create(mm6_kernel3_L{{layer}});
       source(mm[0]) = "mm6_kernel3_L{{layer}}.cc";
@@ -42,44 +44,26 @@ class mm_k6_B{{B}}_L{{layer}}: public graph {
         }
         {% endif %}
         runtime<ratio>(mm[i]) = 1;
-        if ((ROW_OFFSET%2)==0){
-          adf::location<kernel>(mm[i]) = adf::tile(COL_OFFSET+i,ROW_OFFSET);
-        }
-        else{
-          adf::location<kernel>(mm[i]) = adf::tile(COL_OFFSET-i,ROW_OFFSET);
-        }
+        adf::location<kernel>(mm[i]) = adf::tile(first_col+i, ROW_OFFSET);
       }
 
-      for (int i=0; i<L{{layer}}_NUM_KERNEL;i++){
-        if ((ROW_OFFSET%2)==0){
-          location<buffer>(mm[i].in[0]) =
-          { address(COL_OFFSET+i, ROW_OFFSET+1, 0x0000), 
-            address(COL_OFFSET+i, ROW_OFFSET+1, 0x2000)};
-          location<buffer>(mm[i].in[1]) =
-          { address(COL_OFFSET+i, ROW_OFFSET, 0x4000), 
-            address(COL_OFFSET+i, ROW_OFFSET, 0x6000)};
-          if(i==L{{layer}}_NUM_KERNEL-1){
-            location<buffer>(mm[i].out[0]) =
-            { address(COL_OFFSET+i-1, ROW_OFFSET, 0x5000), 
-              address(COL_OFFSET+i-1, ROW_OFFSET, 0x7000)};
-          }  
-          location<stack>(mm[i]) = address(COL_OFFSET+i, ROW_OFFSET, 0x3000);
+      for (int i=0; i<L{{layer}}_NUM_KERNEL; i++) {
+        const int col = first_col + i;
+        const int a_row = ROW_OFFSET + ((ROW_OFFSET % 2 == 0) ? 1 : -1);
+        // Retain CHARM's window sizes, ping/pong offsets and stack offset.
+        // Placement still requires validation with the AIE-ML compiler.
+        location<buffer>(mm[i].in[0]) =
+          { address(col, a_row, 0x0000), address(col, a_row, 0x2000) };
+        location<buffer>(mm[i].in[1]) =
+          { address(col, ROW_OFFSET, 0x4000), address(col, ROW_OFFSET, 0x6000) };
+        if (i == L{{layer}}_NUM_KERNEL-1) {
+          const int out_col = (L{{layer}}_NUM_KERNEL == 1) ? col : col-1;
+          location<buffer>(mm[i].out[0]) =
+            { address(out_col, ROW_OFFSET, 0x5000), address(out_col, ROW_OFFSET, 0x7000) };
         }
-        else{
-          location<buffer>(mm[i].in[0]) =
-          { address(COL_OFFSET-i, ROW_OFFSET-1, 0x0000), 
-            address(COL_OFFSET-i, ROW_OFFSET-1, 0x2000)};
-          location<buffer>(mm[i].in[1]) =
-          { address(COL_OFFSET-i, ROW_OFFSET, 0x4000), 
-            address(COL_OFFSET-i, ROW_OFFSET, 0x6000)};
-          if(i==L{{layer}}_NUM_KERNEL-1){
-            location<buffer>(mm[i].out[0]) =
-            { address(COL_OFFSET-i+1, ROW_OFFSET, 0x5000), 
-              address(COL_OFFSET-i+1, ROW_OFFSET, 0x7000)};
-          }
-          location<stack>(mm[i]) = address(COL_OFFSET-i, ROW_OFFSET, 0x3000);
-        }
+        location<stack>(mm[i]) = address(col, ROW_OFFSET, 0x3000);
       }
+
 
       for (int i=0; i<L{{layer}}_NUM_KERNEL;i++){
         connect<window<L{{layer}}_h1*L{{layer}}_w1*L{{layer}}_Byte>>(in0[i], mm[i].in[0]);
@@ -88,7 +72,7 @@ class mm_k6_B{{B}}_L{{layer}}: public graph {
 
       for (int i=0; i<L{{layer}}_NUM_KERNEL;i++){
         if(i==L{{layer}}_NUM_KERNEL-1){
-          connect<window<L{{layer}}_h1*L{{layer}}_w2*4>>(mm[i].out[0], out);
+          connect<window<L{{layer}}_h1*L{{layer}}_w2*L{{layer}}_Byte>>(mm[i].out[0], out);
         }
         else{
           connect<cascade>(mm[i].out[0], mm[i+1].in[2]);

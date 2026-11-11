@@ -1,5 +1,11 @@
 # AIE templates: VEK280 porting TODO
 
+INT8 update (2026-11-10): `kernel_int8_stream` and `kernel_int8_packet`
+have initial AIE-ML source ports, including the historical extra standalone
+test. Host checks passed; compiler/simulator execution remains with the user.
+See [INT8 port details and execution cases](../../docs/porting_plan/int8_aie_ml_port.md).
+FP32 is explicitly deferred and unchanged.
+
 Updated: 2026-11-09.
 
 ## Agreed scope

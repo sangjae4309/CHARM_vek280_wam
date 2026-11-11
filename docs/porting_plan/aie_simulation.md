@@ -1,6 +1,6 @@
 # kernel5 generation and simulation
 
-Updated: 2026-11-09.
+Updated: 2026-11-10.
 
 The user requested a specific generation script in the style of `test_c*.py`,
 not a general simulation framework. The entrypoint is now
@@ -57,7 +57,40 @@ dependencies, and license access to be available inside it. Docker is present
 on PATH, but daemon access and container execution have not been verified.
 No container, library, or system configuration was changed. Only shell syntax
 was checked for the split scripts; no vendor tools were invoked by the assistant.
-Simulation and numerical verification remain pending.
+That startup failure is historical; the current result is recorded below.
+
+## Current simulation result (inspected 2026-11-10)
+
+Scope: the existing INT16 kernel5 fixture, three cascade stages and four graph
+iterations. Sources: `sim/tmp_kernel5_vek280/simulate.log`, generated
+`aie/aie_top_all.cpp`, `aiesimulator_output/data/output0.txt`, and the existing
+`check_output.py`. The log identifies AI Engine Simulator 2025.2, the
+cycle-approximate model, and an AIE frequency of 1.25 GHz.
+
+- The recorded run completed with `Sim result: 0`.
+- Total simulated time: 76,742,401 ps = 76.742401 us. This includes startup and
+  the final PLIO flush; it is not an isolated kernel execution measurement.
+- Simulator wall clock time: 699.89 s = 11 min 39.89 s. This does not establish
+  combined compilation-plus-simulation elapsed time.
+- Output timestamps range from 19.609480 us to 70.841964 us.
+- Numerical verification: all 9,216 INT16 values match, with zero mismatches.
+  The assistant executed the existing checker functions in memory, replacing
+  only JSON saving with reporting, without rerunning vendor tools or writing
+  case artifacts.
+
+Porting implication: this fixture now has a successful simulated numerical
+result. Signed-input and overflow coverage, isolated kernel timing, and board
+validation remain unverified. The current logs do not establish how the earlier
+host runtime compatibility problem was resolved.
+
+PLIO bandwidth inspection (2026-11-10): `throughput_info.json` reports
+975.683303 MB/s for LHS input, 975.459086 MB/s for RHS input, and
+360.111232 MB/s for output. The generated `aie/aie_top_all.cpp` configures
+each PLIO as 128 bits at 230 MHz, giving a nominal per-port interface rate
+of 3,680 MB/s (16 bytes x 230 MHz). Reported throughput divided by this
+nominal rate is approximately 26.5%, 26.5%, and 9.8%, respectively. These
+are simulator-reported rates, not board measurements or proof of a bandwidth
+bottleneck; their averaging interval has not been independently established.
 
 See the [case README](../../sim/tmp_kernel5_vek280/README.md) for the local layout.
 

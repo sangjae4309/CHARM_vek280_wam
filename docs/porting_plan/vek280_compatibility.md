@@ -71,9 +71,9 @@ AIE-ML에서 처음 가능해진다는 뜻은 아니다.
 
 ## 함께 검토할 원본 의존성
 
-근거 파일: [mm5_kernel0.cc](../../templates/aie/kernel5/aie/mm5_kernel0.cc),
-[para.h](../../templates/aie/kernel5/aie/para.h),
-[aie_graph.h](../../templates/aie/kernel5/aie/aie_graph.h).
+근거 파일: [mm5_kernel0.cc](../../templates/aie/kernel_int16_packet/aie/mm5_kernel0.cc),
+[para.h](../../templates/aie/kernel_int16_packet/aie/para.h),
+[aie_graph.h](../../templates/aie/kernel_int16_packet/aie/aie_graph.h).
 
 | 항목 | 현재 소스에서 확인한 것 | 이후 검토할 것 |
 | --- | --- | --- |
